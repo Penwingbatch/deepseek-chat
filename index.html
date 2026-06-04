@@ -151,17 +151,20 @@
 
             try {
                 const response = await fetch(API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        model: MODEL,
-                        messages: [
-                            { role: 'system', content: '你是DeepSeek智能助手，由深度求索公司创造。请用中文友好、专业地回答问题。' },
-                            { role: 'user', content: message }
-                        ],
-                        stream: false
-                    })
-                });
+    method: 'POST',
+    headers: { 
+        'Content-Type': 'application/json',
+        'X-Auth-Token': 'Mf214782'   // 改成和 Worker 里一样的密码
+    },
+    body: JSON.stringify({
+        model: MODEL,
+        messages: [
+            { role: 'system', content: '你是DeepSeek智能助手，由深度求索公司创造。请用中文友好、专业地回答问题。' },
+            { role: 'user', content: message }
+        ],
+        stream: false
+    })
+});;
 
                 if (!response.ok) {
                     throw new Error(`API 请求失败: ${response.status}`);
