@@ -103,6 +103,70 @@
         .chat-messages::-webkit-scrollbar-track { background: #1a1a20; }
         .chat-messages::-webkit-scrollbar-thumb { background: #3a3a44; border-radius: 10px; }
         @media (max-width: 600px) { .message { max-width: 90%; } .chat-header h1 { font-size: 1.2rem; } }
+
+        /* 密码弹窗样式 */
+        .password-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .password-modal {
+            background: #1e1e24;
+            border-radius: 24px;
+            padding: 32px;
+            width: 300px;
+            text-align: center;
+            border: 1px solid #2c2c35;
+            box-shadow: 0 20px 35px rgba(0,0,0,0.5);
+        }
+        .password-modal h2 {
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            background: linear-gradient(135deg, #64ffda, #4c9aff);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        .password-modal input {
+            width: 100%;
+            padding: 12px;
+            border-radius: 40px;
+            border: 1px solid #2c2c35;
+            background: #0f0f13;
+            color: #e1e3e8;
+            font-size: 1rem;
+            margin-bottom: 20px;
+            outline: none;
+        }
+        .password-modal input:focus {
+            border-color: #4c9aff;
+        }
+        .password-modal button {
+            background: linear-gradient(135deg, #4c9aff, #2a6ed9);
+            border: none;
+            padding: 10px 24px;
+            border-radius: 40px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        .password-modal button:active {
+            transform: scale(0.97);
+        }
+        .error-msg {
+            color: #ff6b6b;
+            margin-top: 12px;
+            font-size: 0.8rem;
+        }
     </style>
 </head>
 <body>
@@ -115,28 +179,69 @@
 
     <div class="chat-input-container">
         <div class="input-wrapper">
-            <textarea class="chat-input" id="userInput" rows="1" placeholder="输入你的问题..."></textarea>
-            <button class="send-btn" id="sendBtn">➤</button>
+            <textarea class="chat-input" id="userInput" rows="1" placeholder="输入你的问题..." disabled></textarea>
+            <button class="send-btn" id="sendBtn" disabled>➤</button>
+        </div>
+    </div>
+
+    <!-- 密码弹窗 -->
+    <div id="passwordOverlay" class="password-overlay">
+        <div class="password-modal">
+            <h2>🔐 访问验证</h2>
+            <input type="password" id="passwordInput" placeholder="请输入访问密码" autofocus>
+            <button id="unlockBtn">解锁</button>
+            <div id="errorMsg" class="error-msg"></div>
         </div>
     </div>
 
     <script>
-        // 改成你的 Cloudflare Worker 地址
+        // 配置
         const API_URL = 'https://deepseek-proxy.sherly214782.workers.dev';
         const MODEL = 'deepseek-chat';
+        // 预设密码（与 Worker 中 VALID_TOKEN 一致）
+        const CORRECT_PASSWORD = 'Mf214782';  // 请修改成你设置的密码
 
         const chatMessages = document.getElementById('chatMessages');
         const userInput = document.getElementById('userInput');
         const sendBtn = document.getElementById('sendBtn');
+        const passwordOverlay = document.getElementById('passwordOverlay');
+        const passwordInput = document.getElementById('passwordInput');
+        const unlockBtn = document.getElementById('unlockBtn');
+        const errorMsgDiv = document.getElementById('errorMsg');
 
         let isLoading = false;
+        let isUnlocked = false;
 
+        // 解锁函数
+        function unlock() {
+            const enteredPassword = passwordInput.value;
+            if (enteredPassword === CORRECT_PASSWORD) {
+                isUnlocked = true;
+                passwordOverlay.style.display = 'none';
+                userInput.disabled = false;
+                sendBtn.disabled = false;
+                userInput.focus();
+            } else {
+                errorMsgDiv.textContent = '密码错误，请重试';
+                passwordInput.value = '';
+                passwordInput.focus();
+            }
+        }
+
+        unlockBtn.addEventListener('click', unlock);
+        passwordInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') unlock();
+        });
+
+        // 原有聊天逻辑（仅当解锁后可用）
         userInput.addEventListener('input', function() {
+            if (!isUnlocked) return;
             this.style.height = 'auto';
             this.style.height = Math.min(this.scrollHeight, 120) + 'px';
         });
 
         async function sendMessage() {
+            if (!isUnlocked) return;
             const message = userInput.value.trim();
             if (!message || isLoading) return;
 
@@ -151,23 +256,25 @@
 
             try {
                 const response = await fetch(API_URL, {
-    method: 'POST',
-    headers: { 
-        'Content-Type': 'application/json',
-        'X-Auth-Token': 'Mf214782'   // 改成和 Worker 里一样的密码
-    },
-    body: JSON.stringify({
-        model: MODEL,
-        messages: [
-            { role: 'system', content: '你是DeepSeek智能助手，由深度求索公司创造。请用中文友好、专业地回答问题。' },
-            { role: 'user', content: message }
-        ],
-        stream: false
-    })
-});;
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'X-Auth-Token': CORRECT_PASSWORD   // 发送密码到 Worker
+                    },
+                    body: JSON.stringify({
+                        model: MODEL,
+                        messages: [
+                            { role: 'system', content: '你是DeepSeek智能助手，由深度求索公司创造。请用中文友好、专业地回答问题。' },
+                            { role: 'user', content: message }
+                        ],
+                        stream: false
+                    })
+                });
 
                 if (!response.ok) {
-                    throw new Error(`API 请求失败: ${response.status}`);
+                    let errorText = `API 请求失败: ${response.status}`;
+                    if (response.status === 401) errorText = '密码验证失败，请刷新页面重试';
+                    throw new Error(errorText);
                 }
 
                 const data = await response.json();
@@ -181,9 +288,11 @@
                 console.error('API 调用错误:', error);
             } finally {
                 isLoading = false;
-                sendBtn.disabled = false;
-                userInput.disabled = false;
-                userInput.focus();
+                if (isUnlocked) {
+                    sendBtn.disabled = false;
+                    userInput.disabled = false;
+                    userInput.focus();
+                }
             }
         }
 
@@ -227,7 +336,7 @@
 
         sendBtn.addEventListener('click', sendMessage);
         userInput.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
+            if (e.key === 'Enter' && !e.shiftKey && !isLoading && isUnlocked) {
                 e.preventDefault();
                 sendMessage();
             }
